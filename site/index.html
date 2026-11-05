@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Digest">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#E9EFF2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101B22" media="(prefers-color-scheme: dark)">
+<title>Daily Digest</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,650&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #E9EFF2;
+    --surface: #F7FAFB;
+    --ink: #17252E;
+    --muted: #5A6B75;
+    --sea: #0B7A80;
+    --line: #D3DDE2;
+    --serif: "Literata", Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101B22;
+      --surface: #16242C;
+      --ink: #E4ECF0;
+      --muted: #94A6B0;
+      --sea: #5CC6CB;
+      --line: #24353F;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html { height: 100%; }
+  body {
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-text-size-adjust: 100%;
+    padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 0 20px 48px; }
+
+  header { padding: 28px 0 8px; }
+  .day {
+    font-family: var(--serif);
+    font-weight: 650;
+    font-size: 2.1rem;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+  }
+  .listen {
+    margin-top: 14px;
+    font: 600 1rem var(--sans);
+    color: var(--bg);
+    background: var(--sea);
+    border: 0;
+    border-radius: 999px;
+    padding: 10px 20px;
+    cursor: pointer;
+  }
+  .updated { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
+
+  .bar {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 2;
+    background: var(--bg);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 12px 0;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--line);
+  }
+  .bar a, .bar button {
+    flex: none;
+    font: 600 0.92rem var(--sans);
+    color: var(--ink);
+    text-decoration: none;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+  .bar .lang { margin-left: auto; display: flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; flex: none; }
+  .bar .lang button { border: 0; border-radius: 0; background: transparent; color: var(--muted); }
+  .bar > button[aria-pressed="true"] { background: var(--sea); color: var(--bg); border-color: var(--sea); }
+  .bar .lang button[aria-pressed="true"] { background: var(--sea); color: var(--bg); }
+
+  section { padding-top: 26px; scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 64px); }
+  h2 {
+    font-family: var(--serif);
+    font-weight: 650;
+    font-size: 1.35rem;
+    color: var(--sea);
+    margin-bottom: 6px;
+  }
+  article { border-top: 1px solid var(--line); }
+  article:first-of-type { border-top: 0; }
+  article a {
+    display: block;
+    padding: 14px 0;
+    color: inherit;
+    text-decoration: none;
+  }
+  article h3 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: 1.12rem;
+    line-height: 1.38;
+  }
+  article p {
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.45;
+    margin-top: 5px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .meta { color: var(--muted); font-size: 0.82rem; margin-top: 7px; }
+  .note { color: var(--muted); padding: 14px 0; font-size: 0.95rem; }
+
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--sea); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 class="day" id="day"></h1>
+    <button class="listen" id="listen" type="button" hidden>Listen</button>
+    <p class="updated" id="updated">Loading today's digest…</p>
+  </header>
+  <nav class="bar" id="bar" aria-label="Topics"></nav>
+  <main id="content"></main>
+</div>
+
+<script>
+  var digest = null;
+  var lang = "en";
+  var tab = "topics";
+  var currentSections = [];
+  var currentSpeechLang = "en";
+  var speaking = false;
+  var canSpeak = "speechSynthesis" in window;
+
+  function setListenLabel() {
+    var button = document.getElementById("listen");
+    if (lang === "de") { button.textContent = speaking ? "Stopp" : "Vorlesen"; }
+    else { button.textContent = speaking ? "Stop" : "Listen"; }
+  }
+
+  function stopSpeaking() {
+    if (canSpeak) { window.speechSynthesis.cancel(); }
+    speaking = false;
+    setListenLabel();
+  }
+
+  function startSpeaking() {
+    var parts = [];
+    currentSections.forEach(function (section) {
+      parts.push(section.label + ".");
+      section.articles.forEach(function (item) {
+        parts.push(item.title + ".");
+        if (item.description) { parts.push(item.description); }
+      });
+    });
+    if (parts.length === 0) { return; }
+
+    window.speechSynthesis.cancel();
+    speaking = true;
+    setListenLabel();
+    var voiceLang = currentSpeechLang === "de" ? "de-DE" : "en-GB";
+    parts.forEach(function (text, index) {
+      var utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = voiceLang;
+      utterance.rate = 1;
+      if (index === parts.length - 1) {
+        utterance.onend = function () { speaking = false; setListenLabel(); };
+      }
+      window.speechSynthesis.speak(utterance);
+    });
+  }
+
+  document.getElementById("listen").addEventListener("click", function () {
+    if (speaking) { stopSpeaking(); } else { startSpeaking(); }
+  });
+
+  try {
+    var saved = localStorage.getItem("digest-lang");
+    if (saved === "en" || saved === "de") { lang = saved; }
+  } catch (e) { /* storage not available: keep default */ }
+
+  var TEXT = {
+    en: { updated: "Updated", noArticles: "No articles today.", failed: "This topic could not be loaded today.", locale: "en-GB" },
+    de: { updated: "Aktualisiert", noArticles: "Heute keine Artikel.", failed: "Dieses Thema konnte heute nicht geladen werden.", locale: "de-DE" }
+  };
+
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) { node.className = className; }
+    if (text) { node.textContent = text; }
+    return node;
+  }
+
+  function timeAgo(isoDate) {
+    var stamp = new Date(isoDate).getTime();
+    if (isNaN(stamp)) { return ""; }
+    var hours = Math.round((Date.now() - stamp) / 3600000);
+    if (hours >= 48) { return new Date(stamp).toLocaleDateString(TEXT[lang].locale, { day: "numeric", month: "short" }); }
+    if (lang === "de") { return hours < 1 ? "gerade eben" : "vor " + hours + " Std."; }
+    return hours < 1 ? "just now" : hours + " h ago";
+  }
+
+  function render() {
+    var t = TEXT[lang];
+    document.documentElement.lang = lang;
+    document.getElementById("day").textContent =
+      new Date().toLocaleDateString(t.locale, { weekday: "long", day: "numeric", month: "long" });
+
+    var generated = new Date(digest.generated_at);
+    document.getElementById("updated").textContent =
+      t.updated + ": " + generated.toLocaleString(t.locale, { weekday: "short", hour: "2-digit", minute: "2-digit" });
+
+    var bar = document.getElementById("bar");
+    var content = document.getElementById("content");
+    bar.textContent = "";
+    content.textContent = "";
+
+    // Tabs: "Topics" plus one tab per site
+    var tabs = [{ id: "topics", name: lang === "de" ? "Themen" : "Topics" }];
+    (digest.sites || []).forEach(function (site) { tabs.push({ id: site.id, name: site.name }); });
+    tabs.forEach(function (item) {
+      var button = el("button", null, item.name);
+      button.setAttribute("aria-pressed", item.id === tab ? "true" : "false");
+      button.addEventListener("click", function () { stopSpeaking(); tab = item.id; render(); window.scrollTo(0, 0); });
+      bar.appendChild(button);
+    });
+
+    var sections = [];
+    if (tab === "topics") {
+      sections = digest.languages[lang] || [];
+    } else {
+      (digest.sites || []).forEach(function (site) {
+        if (site.id === tab) {
+          sections = [{ id: site.id, label: site.name, articles: site.articles, error: site.error, isSite: true }];
+        }
+      });
+    }
+
+    currentSections = sections;
+    currentSpeechLang = lang;
+    if (tab !== "topics") {
+      (digest.sites || []).forEach(function (site) {
+        if (site.id === tab && site.lang) { currentSpeechLang = site.lang; }
+      });
+    }
+    var listenButton = document.getElementById("listen");
+    listenButton.hidden = !canSpeak;
+    setListenLabel();
+
+    sections.forEach(function (section) {
+      var block = el("section");
+      block.id = section.id;
+      block.appendChild(el("h2", null, section.label));
+
+      if (section.error) {
+        block.appendChild(el("p", "note", t.failed));
+      } else if (section.articles.length === 0) {
+        block.appendChild(el("p", "note", t.noArticles));
+      }
+
+      section.articles.forEach(function (item) {
+        var article = el("article");
+        var a = el("a");
+        a.href = item.url;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.appendChild(el("h3", null, item.title));
+        if (item.description) { a.appendChild(el("p", null, item.description)); }
+        var when = item.published_at ? timeAgo(item.published_at) : "";
+        var meta = section.isSite ? when : (item.source + (when ? ", " + when : ""));
+        if (meta) { a.appendChild(el("div", "meta", meta)); }
+        article.appendChild(a);
+        block.appendChild(article);
+      });
+      content.appendChild(block);
+    });
+
+    var switcher = el("div", "lang");
+    ["en", "de"].forEach(function (code) {
+      var button = el("button", null, code.toUpperCase());
+      button.setAttribute("aria-pressed", code === lang ? "true" : "false");
+      button.addEventListener("click", function () {
+        stopSpeaking();
+        lang = code;
+        try { localStorage.setItem("digest-lang", lang); } catch (e) { }
+        render();
+      });
+      switcher.appendChild(button);
+    });
+    bar.appendChild(switcher);
+  }
+
+  fetch("digest.json", { cache: "no-store" })
+    .then(function (response) {
+      if (!response.ok) { throw new Error("HTTP " + response.status); }
+      return response.json();
+    })
+    .then(function (data) { digest = data; render(); })
+    .catch(function () {
+      document.getElementById("updated").textContent =
+        "The digest file is missing. Run the workflow once in GitHub (Actions → Daily news digest → Run workflow).";
+    });
+</script>
+</body>
+</html>
